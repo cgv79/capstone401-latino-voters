@@ -1,0 +1,579 @@
+---
+title: "Github-Data Cleaning"
+output: html_document
+date: "2025-04-07"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE)
+library(haven) #reading .sav (SPSS)
+library(dplyr) #data wrangling
+library(purrr) #efficient iteration over datasets
+```
+
+
+```{r}
+#Load ANES Datasets: 2012, 2016, 2018, 2020 
+
+anes_12 <- read_dta("ANES_04_24_ALL/anes_12.dta")
+anes_16 <- read_dta("ANES_04_24_ALL/anes_16.dta")
+anes_20 <- read.csv("ANES_04_24_ALL/anes_20.csv")
+anes_24 <- read.csv("ANES_04_24_ALL/anes_24.csv")
+
+```
+
+##Creating A Only-Latino Datasets
+#anes_12_latino, anes_16_latino, anes_20-latino, anes_24_latino
+```{r}
+# Filter Latino respondents in each dataset: latino_12, latino_16, latino_20, latino_24
+
+latino_12 <- anes_12 %>%
+  filter(dem_hisp == 1)  # 2012 Hispanic identifier
+
+latino_16 <- anes_16 %>%
+  filter(V161309 == 1)  # 2016 Hispanic identifier 
+
+latino_20<- anes_20 %>%
+  filter(V201549x == 1)  # 2020 Hispanic identifier
+
+latino_24 <- anes_24 %>%
+  filter(V241501x == 1)  # 2024 Hispanic identifier
+```
+
+2012 ANES dataset: 1005 latino identified respondents
+2016 ANES dataset: 450 latino identified respondents ****** look into why the sample is small
+2020 ANES dataset: 5963 latino identified respondents
+2024 ANES dataset: 2301 latino identified respondents
+
+##Harmonizing Variables 
+
+
+#Convert V241566x (Household Income) Into a Social Class Variable
+ANES 2024 lacks a self-identified social class variable, but has V241566x (Total Household Income)
+
+Since income and self-reported social class are related, you can approximate social class using household income categories.
+
+```{r}
+#check distribution of V241566x
+table(latino_24$V241566x)
+summary(latino_24$V241566x)
+```
+Remove NA(-9,-5,-4,-1) from Analysis
+```{r}
+latino_24 <- latino_24 %>%
+  filter(latino_24$V241566x > 0)  # Keep only valid responses
+```
+Understanding the Income Ranges
+```{r}
+table(latino_24$V241566x)
+summary(latino_24$V241566x)
+```
+there are 28 levels of income. We need to group into ranges. 
+
+-Recode V241566x Into Social Class-
+
+Assuming V241566x represents income brackets, and based on the median (17) and distribution, we approximate the social class categories:
+
+```{r}
+latino_24 <- latino_24 %>%
+  mutate(class = case_when(
+    V241566x %in% 1:7 ~ "Lower class",       # Low-income groups
+    V241566x %in% 8:14 ~ "Working class",    # Moderate-income groups
+    V241566x %in% 15:21 ~ "Middle class",    # Mid-range income
+    V241566x %in% 22:28 ~ "Upper class",     # High-income groups
+    TRUE ~ NA_character_  # Assign NA if missing
+  ))
+```
+
+Verify the Recoding
+```{r}
+table(latino_24$class)
+summary(latino_24$class)
+```
+
+
+#Rename all Variables to Common Format
+```{r}
+#2012 latino respondent DF
+latino_12 <- latino_12 %>%
+  rename(
+    vote_pres = presvote2012_x,
+    partyid = prevote_regpty,
+    relig = relig_churchoft,
+    poltalk = discuss_disc,
+    engskill = dem_hisplang,
+    voted = interest_voted2008,
+    genstatus = dem_parents,
+    age = dem_age_r_x,
+    gender = gender_respondent_x,
+    educ = dem_edu,
+    class = dem_whichclass
+  )
+
+#2016 latino respondent DF
+latino_16 <- latino_16 %>%
+  rename(
+    vote_pres = V162034a,
+    partyid = V162030,
+    relig = V161245,
+    poltalk = V161268,
+    engskill = V161323,
+    voted = V162174,
+    genstatus = V161315,
+    age = V161267,
+    gender = V161342,
+    educ = V161270,
+    class = V162132
+  )
+
+#2020 latino respondent DF
+latino_20 <- latino_20 %>%
+  rename(
+    vote_pres = V202073,
+    partyid = V202064,
+    relig = V201453,
+    poltalk = V202022,
+    engskill = V201562,
+    voted = V201101,
+    genstatus = V201553,
+    age = V201507x,
+    gender = V201600,
+    educ = V201510,
+    class = V202352
+  )
+
+#2024 latino respondent DF
+latino_24 <- latino_24 %>%
+  rename(
+    vote_pres = V241039,
+    partyid = V241227x,
+    relig = V241440,
+    poltalk = V241004,
+    engskill = V241516,
+    voted = V241110,
+    genstatus = V241506,
+    age = V241458x,
+    gender = V241551,
+    educ = V241463,
+    class = class
+  )
+```
+
+#Convert All Variables to the Correct Type
+
+Modify each dataset (latino_12, latino_16, latino_20, latino_24) before merging:
+```{r}
+latino_12 <- latino_12 %>%
+  mutate(
+    vote_pres = as.numeric(vote_pres),
+    partyid = as.numeric(partyid),
+    relig = as.numeric(relig),
+    engskill = as.numeric(engskill),
+    poltalk = as.numeric(poltalk),
+    voted = as.numeric(voted),
+    genstatus = as.numeric(genstatus),
+    educ = as.numeric(educ),
+    class = as.character(class)  # Convert class to character for uniformity
+  )
+
+latino_16 <- latino_16 %>%
+  mutate(
+    vote_pres = as.numeric(vote_pres),
+    partyid = as.numeric(partyid),
+    relig = as.numeric(relig),
+    engskill = as.numeric(engskill),
+    poltalk = as.numeric(poltalk),
+    voted = as.numeric(voted),
+    genstatus = as.numeric(genstatus),
+    educ = as.numeric(educ),
+    class = as.character(class)  
+  )
+
+latino_20 <- latino_20 %>%
+  mutate(
+    vote_pres = as.numeric(vote_pres),
+    partyid = as.numeric(partyid),
+    relig = as.numeric(relig),
+    engskill = as.numeric(engskill),
+    poltalk = as.numeric(poltalk),
+    voted = as.numeric(voted),
+    genstatus = as.numeric(genstatus),
+    educ = as.numeric(educ),
+    class = as.character(class)  
+  )
+
+latino_24 <- latino_24 %>%
+  mutate(
+    vote_pres = as.numeric(vote_pres),
+    partyid = as.numeric(partyid),
+    relig = as.numeric(relig),
+    engskill = as.numeric(engskill),
+    poltalk = as.numeric(poltalk),
+    voted = as.numeric(voted),
+    genstatus = as.numeric(genstatus),
+    educ = as.numeric(educ),
+    class = as.character(class)  
+  )
+```
+
+#Keep Only Harmonized Variables
+
+```{r}
+common_vars <- c("vote_pres", "partyid", "relig", "poltalk", "engskill", "voted", "genstatus", "age", "gender", "educ", "class")
+
+#2012
+latino_12 <- latino_12 %>%
+  select(all_of(common_vars)) %>%
+  mutate(year = 2012)
+#2016
+latino_16 <- latino_16 %>%
+  select(all_of(common_vars)) %>%
+  mutate(year = 2016)
+#2020
+latino_20 <- latino_20 %>%
+  select(all_of(common_vars)) %>%
+  mutate(year = 2020)
+#2024
+latino_24 <- latino_24 %>%
+  select(all_of(common_vars)) %>%
+  mutate(year = 2024)
+
+```
+
+
+```{r}
+# Combine all datasets into one
+latino_all <- bind_rows(latino_12, latino_16, latino_20, latino_24)
+```
+
+```{r}
+# cleaning out NA
+all_clean <- latino_all %>%
+  filter(
+    !is.na(vote_pres),
+    !is.na(partyid),
+    !is.na(relig),
+    !is.na(poltalk),
+    !is.na(engskill),
+    !is.na(voted),
+    !is.na(genstatus),
+    !is.na(age),
+    !is.na(gender),
+    !is.na(educ),
+    !is.na(class)
+  )
+```
+
+```{r}
+write.csv(all_clean, "all_clean.csv", row.names = FALSE)
+```
+
+##Make Binary Dependent Variable: Republican Vote 
+
+```{r}
+recode_republican_vote <- function(df, year) {
+  df %>%
+    mutate(republican_vote = case_when(
+      year == 2012 & vote_pres == 2 ~ 1,  # Republican (Romney)
+      year == 2012 & vote_pres != 2 ~ 0,  # Not Republican
+      
+      year == 2016 & vote_pres == 2 ~ 1,  # Republican (Trump)
+      year == 2016 & vote_pres != 2 ~ 0,  # Not Republican
+
+      year == 2020 & vote_pres == 2 ~ 1,  # Republican (Trump)
+      year == 2020 & vote_pres != 2 ~ 0,  # Not Republican
+
+      year == 2024 & vote_pres == 2 ~ 1,  # Republican (TBD)
+      year == 2024 & vote_pres != 2 ~ 0,  # Not Republican
+      
+      vote_pres %in% c(-9, -8, -5, -4, -1) ~ NA_real_,  # Missing values
+      TRUE ~ NA_real_
+    ))
+}
+all_clean <- recode_republican_vote(all_clean)
+```
+
+```{r}
+table(all_clean$year, all_clean$republican_vote, useNA = "ifany")
+```
+
+
+## Create Political Assimilation Based on Indicators 
+1. English Proficiency → (Language Spoken at Home)
+2. Participation in Political Discussion → (Discussing Politics with Family & Friends)
+3. Voter Participation History → (Did You Vote in the Last Election?)
+4. Generational Status → (Native Status of Parents)
+
+#Recode All Indicators to Numeric Scales 
+#English Proficiency
+```{r}
+#higher= more english use -> reverse the scale
+
+all_clean <- all_clean %>%
+  mutate(
+    engskill_recoded = case_when(
+      engskill %in% c(1, 2) ~ 5,  # Only/mostly English
+      engskill == 3 ~ 3,
+      engskill %in% c(4, 5) ~ 1,  # Mostly/only Spanish
+      TRUE ~ NA_real_
+    )
+  )
+```
+
+#Political Discussion
+```{r}
+#need to harmonize across years:
+  #2012-2020: 1= Yes, 2 = No -> recode to 1 = frequent, 0= infrequent
+  #2024: 1= Always -> reverse to match scale 
+
+all_clean <- all_clean %>%
+  mutate(
+    poltalk_recoded = case_when(
+      year %in% c(2012, 2016, 2020) & poltalk == 1 ~ 1,
+      year %in% c(2012, 2016, 2020) & poltalk == 2 ~ 0,
+      year == 2024 & poltalk %in% 1:5 ~ 6 - poltalk,  # Reverse so 5=Always
+      TRUE ~ NA_real_
+    )
+  )
+```
+
+#Voter Participation (voted)
+
+```{r}
+#standardize across the years: 1= Voted, 2= Did not vote
+
+all_clean <- all_clean %>%
+  mutate(
+    voted_recoded = case_when(
+      voted == 1 ~ 1,
+      voted == 2 ~ 0,
+      TRUE ~ NA_real_
+    )
+  )
+```
+
+#Generational Status (genstatus)
+
+```{r}
+#1= U.S born parents -> more assimilated
+all_clean <- all_clean %>%
+  mutate(
+    genstatus_recoded = case_when(
+      genstatus == 1 ~ 3,  # Both parents U.S. born
+      genstatus == 2 ~ 2,
+      genstatus == 3 ~ 1,  # Neither parent U.S. born
+      TRUE ~ NA_real_
+    )
+  )
+```
+
+#Standardize Each Indicator
+```{r}
+# z-score all recoded variables so they contribute equally to the index
+all_clean <- all_clean %>%
+  mutate(
+    z_engskill = scale(engskill_recoded)[,1],
+    z_poltalk = scale(poltalk_recoded)[,1],
+    z_voted = scale(voted_recoded)[,1],
+    z_genstatus = scale(genstatus_recoded)[,1]
+  )
+```
+
+
+#Create Political Assimilation Index
+```{r}
+all_clean <- all_clean %>%
+  mutate(
+    assimilation_index = rowMeans(select(., z_engskill, z_poltalk, z_voted, z_genstatus), na.rm = TRUE)
+  )
+```
+
+```{r}
+#check index
+summary(all_clean$assimilation_index)
+hist(all_clean$assimilation_index, main = "Political Assimilation Index", xlab = "Z-score Average")
+```
+
+#Standardize Partisan Identification
+
+ Key Adjustments for 2012
+Democratic Party (1 in 2012) → Strong/Lean Democrat
+Republican Party (2 in 2012) → Strong/Lean Republican
+None/Independent (4 in 2012) → Independent
+Other (5 in 2012) → Categorized as "Other" or NA
+Inapplicable, Don't Know, and Refused (-1, -8, -9) → NA
+
+
+```{r}
+
+recode_partyid <- function(df, year) {
+  df %>%
+    mutate(partyid = case_when(
+      year == 2012 & partyid == 1 ~ 1,  # Democrat
+      year == 2012 & partyid == 2 ~ 2,  # Republican
+      year == 2012 & partyid == 4 ~ 3,  # Independent
+      year == 2012 & partyid == 5 ~ 4,  # Other
+      
+      year == 2016 & partyid %in% c(1, 2) ~ 1,  # Democrat
+      year == 2016 & partyid %in% c(5, 6) ~ 2,  # Republican
+      year == 2016 & partyid %in% c(3, 4) ~ 3,  # Independent
+      year == 2016 & partyid == 7 ~ 4,  # Other
+      
+      year == 2020 & partyid %in% c(1, 2) ~ 1,  # Democrat
+      year == 2020 & partyid %in% c(5, 6) ~ 2,  # Republican
+      year == 2020 & partyid %in% c(3, 4) ~ 3,  # Independent
+      year == 2020 & partyid == 7 ~ 4,  # Other
+      
+      year == 2024 & partyid %in% c(1, 2) ~ 1,  # Democrat
+      year == 2024 & partyid %in% c(5, 6) ~ 2,  # Republican
+      year == 2024 & partyid %in% c(3, 4) ~ 3,  # Independent
+      year == 2024 & partyid == 7 ~ 4,  # Other
+      
+      partyid %in% c(-9, -8, -5, -4, -1) ~ NA_real_,  # Set missing values to NA
+      TRUE ~ partyid  # Keep original if not recoded
+    ))
+}
+
+all_clean <- recode_partyid(all_clean)
+
+
+```
+
+```{r}
+table(all_clean$partyid)
+```
+
+```{r}
+# convert partyid to a factor for logistic regression
+all_clean$partyid <- factor(all_clean$partyid,
+                                   levels = c(1, 2, 3, 4),
+                                   labels = c("Democrat", "Republican", "Independent", "Other"))
+```
+
+# Recode Religiosity 
+
+```{r}
+recode_religiosity <- function(df) {
+  df %>%
+    mutate(relig = case_when(
+      # Standardized coding for all years
+      year %in% c(2012, 2016, 2020, 2024) & relig == 1 ~ 5,  # Every week
+      year %in% c(2012, 2016, 2020, 2024) & relig == 2 ~ 4,  # Almost every week
+      year %in% c(2012, 2016, 2020, 2024) & relig == 3 ~ 3,  # Once or twice a month
+      year %in% c(2012, 2016, 2020, 2024) & relig == 4 ~ 2,  # A few times a year
+      year %in% c(2012, 2016, 2020, 2024) & relig == 5 ~ 1,  # Never
+
+      # Handle missing values for all years
+      year == 2012 & relig %in% c(-1, -9) ~ NA_real_,
+      year == 2016 & relig %in% c(-1, -9, -8, 2) ~ NA_real_,
+      year == 2020 & relig %in% c(-9, -8, -1) ~ NA_real_,
+      year == 2024 & relig %in% c(-9, -1) ~ NA_real_,
+
+      TRUE ~ relig  # Keep original values if they don't match any case
+    ))
+}
+
+all_clean <- recode_religiosity(all_clean)
+```
+
+```{r}
+table(all_clean$relig)
+```
+#Recode Gender (Binary)
+
+```{r}
+recode_gender <- function(df) {
+  df %>%
+    mutate(gender = case_when(
+      # 2012 Scale (1 = Male, 2 = Female)
+      year == 2012 & gender == 1 ~ 0,  # Male → 0
+      year == 2012 & gender == 2 ~ 1,  # Female → 1
+      
+      # 2016 Scale (1 = Male, 2 = Female, 3 = Other, -9 = Refused)
+      year == 2016 & gender == 1 ~ 0,  # Male → 0
+      year == 2016 & gender == 2 ~ 1,  # Female → 1
+      year == 2016 & gender == 3 ~ 2,  # Other → 2
+      year == 2016 & gender == -9 ~ NA_real_,  # Refused → NA
+      
+      # 2020 Scale (-9 = Refused, 1 = Male, 2 = Female)
+      year == 2020 & gender == 1 ~ 0,  # Male → 0
+      year == 2020 & gender == 2 ~ 1,  # Female → 1
+      year == 2020 & gender == -9 ~ NA_real_,  # Refused → NA
+      
+      # 2024 Scale (-1 = Inapplicable, 9 = Refused, 1 = Man, 2 = Woman, 3 = Nonbinary, 4 = Something Else)
+      year == 2024 & gender == 1 ~ 0,  # Man → 0
+      year == 2024 & gender == 2 ~ 1,  # Woman → 1
+      year == 2024 & gender %in% c(3, 4) ~ 2,  # Nonbinary & Something else → 2
+      year == 2024 & gender %in% c(-1, 9) ~ NA_real_,  # Inapplicable/Refused → NA
+      
+      # Catch all unexpected values as NA
+      TRUE ~ NA_real_
+    ))
+}
+
+# Apply function to the combined dataset
+all_clean <- recode_gender(all_clean)
+
+# Check distribution of gender after recoding
+table(all_clean$gender, useNA = "ifany")
+```
+
+Education Level (Ordinal)
+Education is typically measured as an ordinal variable, so we align different years to a standard scale:
+```{r}
+recode_education <- function(df, year) {
+  df %>%
+    mutate(educ = case_when(
+      # 2024 Mapping
+      year == 2024 & educ %in% c(1, 2, 3, 4, 5, 6, 7, 8) ~ 1,  # Less than high school
+      year == 2024 & educ == 9 ~ 2,  # Some high school (9-12, no diploma)
+      year == 2024 & educ == 10 ~ 3,  # High school graduate
+      year == 2024 & educ %in% c(11, 12) ~ 4,  # Some college
+      year == 2024 & educ == 13 ~ 5,  # Associate degree
+      year == 2024 & educ == 14 ~ 6,  # Bachelor's degree
+      year == 2024 & educ == 15 ~ 7,  # Master's degree
+      year == 2024 & educ == 16 ~ 8,  # Professional/Doctorate degree
+
+      # 2020 Mapping
+      year == 2020 & educ == 1 ~ 1,
+      year == 2020 & educ == 2 ~ 2,
+      year == 2020 & educ == 3 ~ 3,
+      year == 2020 & educ %in% c(4, 5) ~ 4,
+      year == 2020 & educ == 6 ~ 5,
+      year == 2020 & educ == 7 ~ 6,
+      year == 2020 & educ == 8 ~ 7,
+
+      # 2016 Mapping
+      year == 2016 & educ %in% c(1, 2, 3, 4, 5, 6, 7, 8) ~ 1,  # Less than high school
+      year == 2016 & educ == 9 ~ 2,  # Some high school
+      year == 2016 & educ == 10 ~ 3,  # High school graduate
+      year == 2016 & educ %in% c(11, 12) ~ 4,  # Some college
+      year == 2016 & educ == 13 ~ 5,  # Associate degree
+      year == 2016 & educ == 14 ~ 6,  # Bachelor's degree
+      year == 2016 & educ == 15 ~ 7,  # Master's degree
+      year == 2016 & educ == 16 ~ 8,  # Professional/Doctorate degree
+
+      # 2012 Mapping
+      year == 2012 & educ %in% c(6, 7, 8) ~ 1,  # Less than high school
+      year == 2012 & educ == 9 ~ 2,  # Some high school
+      year == 2012 & educ == 10 ~ 3,  # High school graduate
+      year == 2012 & educ %in% c(11, 12) ~ 4,  # Some college
+      year == 2012 & educ == 13 ~ 5,  # Associate degree
+      year == 2012 & educ == 14 ~ 6,  # Bachelor's degree
+      year == 2012 & educ == 15 ~ 7,  # Master's degree
+
+      # Handle missing values
+      educ %in% c(-9, -8, -1, 95) ~ NA_real_,
+      TRUE ~ educ  # Keep other values unchanged
+    ))
+}
+
+all_clean <- recode_education(all_clean)
+
+
+```
+
+```{r}
+table(all_clean$educ)
+```
