@@ -1,0 +1,660 @@
+---
+title: "Latino_Voter_Analysis"
+output: html_document
+date: "2025-03-17"
+---
+
+```{r}
+# Load necessary libraries
+library(haven)  # If dataset is in .sav format
+library(carData)    # For VIF (multicollinearity)
+#library(DescTools) # For logistic regression diagnostics
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# Load data
+df <- read.csv("v2.Latino_Voters_ANES.csv") 
+
+
+```
+
+
+Descriptive Statistics
+Summarizing key variables: party identification, Republican vote share, religiosity, and political assimilation.
+
+summarize the count and proportion of each category.
+
+
+```{r}
+#change to factor
+df$party_id <- factor(df$party_id, 
+                      levels = c(1, 2, 3, 4), 
+                      labels = c("Democrat", "Republican", "Independent", "Other"))
+```
+
+```{r}
+df$class <-factor(df$class,
+                  levels = c(1,2,3,4),
+                  label = c("Lower Class", "Working Class","Middle Class","Upper Class"))
+```
+
+```{r}
+df$education <-factor(df$education,
+                  levels = c(1,2,3,4,5,6,7,8),
+                  label = c("Less than HS", "Some HS","HS graduate","Some College","Associate", "Bachelor's", "Master's", "Professional/Doctorate"))
+```
+
+```{r}
+df$gender <- factor(df$gender,
+                    level = c(0,1,2),
+                    labels = c("Male", "Female", "Nonbinary/Other"))
+```
+
+2024's is the source of the high missing values of republican_vote. This is impacting the dependent variable. 
+ I must exclude 2024 from models that use republican_vote. I will filter anes_combined for those analysis. 
+
+
+```{r}
+df_filtered_24 <- df %>%
+  filter(!(year == 2024 & is.na(republican_vote)))
+```
+ 
+```{r}
+# Re-run logistic regression
+logit_model <- glm(republican_vote ~ party_id + religiosity + 
+                      english_proficiency + political_discussion + 
+                      voter_participation + generational_status +
+                      age + gender + education + class, 
+                   data = df_filtered_24, family = binomial)
+
+summary(logit_model)
+```
+```{r}
+library(ggplot2)
+library(broom)
+library(forcats)
+# Convert model summary to a tidy dataframe
+model_summary <- broom::tidy(logit_model, conf.int = TRUE)
+
+# Remove the intercept for better visualization
+model_summary <- model_summary %>% filter(term != "(Intercept)")
+
+# Rename variable labels for better readability
+model_summary <- model_summary %>%
+  mutate(term = fct_recode(term, 
+    "Republican" = "party_idRepublican",
+    "Independent" = "party_idIndependent",
+    "Other Party" = "party_idOther",
+    "Political Discussion" = "political_discussion",
+    "Bachelor's Degree" = "educationBachelor's",
+    "Religiosity" = "religiosity",
+    "Female" = "genderFemale",
+    "Age" = "age",
+    "Voter Participation" = "voter_participation",
+    "Associate Degree" = "educationAssociate",
+    "Working Class" = "classWorking Class",
+    "Master's Degree" = "educationMaster's",
+    "English Proficiency" = "english_proficiency",
+    "Some College" = "educationSome College",
+    "Generational Status" = "generational_status",
+    "High School Graduate" = "educationHS graduate",
+    "Some High School" = "educationSome HS"
+  ))
+
+
+# Plot coefficients with cleaned labels
+ggplot(model_summary, aes(x = reorder(term, estimate), y = estimate)) +
+  geom_point(color = "blue", size = 3) +  # Plot coefficients
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, color = "black") +  # Add confidence intervals
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  # Reference line at zero
+  coord_flip() +  # Flip coordinates for readability
+  theme_minimal() +
+  labs(title = "Latino Republican Vote Choice",
+       x = "Predictor Variable",
+       y = "Coefficient Estimate (Log Odds)")
+```
+```{r}
+library(ggplot2)
+library(broom)
+library(forcats)
+# Convert model summary to a tidy dataframe
+model_summary <- broom::tidy(logit_model, conf.int = TRUE)
+
+# Remove the intercept for better visualization
+model_summary <- model_summary %>% filter(term != "(Intercept)")
+
+# Rename variable labels for better readability
+model_summary <- model_summary %>%
+  mutate(term = fct_recode(term, 
+    "Republican" = "party_idRepublican",
+    "Independent" = "party_idIndependent",
+    "Other Party" = "party_idOther",
+    "Political Discussion" = "political_discussion",
+    "Bachelor's Degree" = "educationBachelor's",
+    "Religiosity" = "religiosity",
+    "Female" = "genderFemale",
+    "Age" = "age",
+    "Voter Participation" = "voter_participation",
+    "Associate Degree" = "educationAssociate",
+    "Working Class" = "classWorking Class",
+    "Master's Degree" = "educationMaster's",
+    "English Proficiency" = "english_proficiency",
+    "Some College" = "educationSome College",
+    "Generational Status" = "generational_status",
+    "High School Graduate" = "educationHS graduate",
+    "Some High School" = "educationSome HS"
+  ))
+
+
+# Plot coefficients with cleaned labels
+ggplot(model_summary, aes(x = reorder(term, estimate), y = estimate)) +
+  geom_point(color = "blue", size = 3) +  # Plot coefficients
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2, color = "black") +  # Add confidence intervals
+  geom_hline(yintercept = 0, linetype = "dashed", color = "red") +  # Reference line at zero
+  coord_flip() +  # Flip coordinates for readability
+  theme_minimal() +
+  labs(title = "Latino Republican Vote Choice",
+       x = "Predictor Variable",
+       y = "Coefficient Estimate (Log Odds)",
+       caption = "Logistic regression estimates of factors influencing Latino Republican vote choice. Coefficients represent log-odds, with positive values indicating an increased likelihood of voting Republican. Black lines show 95% confidence intervals. Data source: ANES 2016-2024."
+  ) +
+  theme(plot.caption = element_text(size = 10, hjust = 0))
+```
+
+# Count of Partisan ID by Year
+```{r}
+df %>%
+  group_by(year, party_id) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  ggplot(aes(x = as.factor(year), y = count, fill = party_id)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Partisan Identification Trends (2004-2024)",
+       x = "Year", y = "Proportion", fill = "Party ID") +
+  theme_minimal() +
+  scale_fill_manual(values = c("blue", "red", "purple", "gray"))
+```
+```{r}
+df_clean <- df %>% filter(!is.na(party_id))
+df_clean %>%
+  group_by(year, party_id) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  ggplot(aes(x = as.factor(year), y = count, fill = party_id)) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Partisan Identification Trends (2012-2024)",
+       x = "Year", y = "Proportion", fill = "Party ID") +
+  theme_minimal() +
+  scale_fill_manual(values = c("blue", "red", "purple", "gray"))
+```
+
+`
+
+#Republican Vote Share Trends
+```{r}
+df_clean <- df_clean %>% filter(!is.na(republican_vote))
+df_clean%>%
+  group_by(year, republican_vote) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = as.factor(year), y = count, fill = as.factor(republican_vote))) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Republican Vote Share Among Latino Voters (2012-2024)",
+       x = "Year", y = "Proportion of Votes", fill = "Republican Vote (1 = Yes, 0 = No)") +
+  theme_minimal()
+```
+#Religiosity Trends
+
+```{r}
+df_clean <- df_clean %>% filter(!is.na(religiosity))
+#change to factor
+df_clean$religiosity <- factor(df_clean$religiosity, 
+                      levels = c(1, 2, 3, 4,5), 
+                      labels = c("Every Week", "Almost Every Week", "Once or Twice a Month","A Few Times A Year", "Never" ))
+```
+
+```{r}
+df_clean %>%
+  group_by(year, religiosity) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = as.factor(year), y = count, fill = as.factor(religiosity))) +
+  geom_bar(stat = "identity", position = "fill") +
+  labs(title = "Religiosity Levels of Latino Voters (2012-2024)",
+       x = "Year", y = "Proportion", fill = "Religiosity Level") +
+  theme_minimal()
+```
+4. Political Assimilation Trends
+Political assimilation is measured using English proficiency, political discussion frequency, and voter participation history.
+
+
+```{r}
+
+df_clean<- df_clean %>% filter(!is.na(political_assimilation))
+df_clean %>%
+  group_by(year) %>%
+  summarise(
+    avg_english_proficiency = mean(english_proficiency, na.rm = TRUE),
+    avg_political_discussion = mean(political_discussion, na.rm = TRUE),
+    avg_voter_participation = mean(voter_participation, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = -year, names_to = "variable", values_to = "value") %>%
+  ggplot(aes(x = as.factor(year), y = value, group = variable, color = variable)) +
+  geom_line(linewidth = 1.2) +
+  labs(title = "Political Assimilation Trends (2012-2024)",
+       x = "Year", y = "Average Score", color = "Assimilation Measure") +
+  theme_minimal()
+```
+##Cross-Tabulations
+Cross-tabulations (contingency tables) help summarize relationships between two categorical variables.
+
+#Republican Vote Choice by Partisan Identification
+```{r}
+table(df_clean$party_id, df_clean$republican_vote)
+prop.table(table(df_clean$party_id, df_clean$republican_vote), margin = 1)  # Row percentages
+
+```
+
+##Logistic Regression- Republican Vote
+The model will predict Republican vote choice (1 = Republican, 0 = Non-Republican) using party ID, religiosity, assimilation factors (English proficiency, political discussion, voter participation), and control variables (age, gender, education, etc.).
+
+
+
+df_clean$class <-factor(df_clean$class,
+                  levels = c(1,2,3,4),
+                  label = c("Lower Class", "Working Class","Middle Class","Upper Class"))
+
+
+
+df_clean$education <-factor(df_clean$education,
+                  levels = c(1,2,3,4,5,6,7,8),
+                  label = c("Less than HS", "Some HS","HS graduate","Some College","Associate", "Bachelor's", "Master's", "Professional/Doctorate"))
+
+
+```{r}
+df_clean$gender <- relevel(as.factor(df_clean$gender), ref = "Male")  # If gender is binary
+```
+
+```{r}
+# Logistic regression model
+logit_model <- glm(republican_vote ~ party_id + religiosity + 
+                      english_proficiency + political_discussion + 
+                      voter_participation + generational_status +
+                      age + gender + education + class, 
+                   data = df_clean, family = binomial)
+
+# Model summary
+summary(logit_model)
+```
+```{r}
+# Convert categorical variables to factors before running the model
+df_clean2 <- df_clean %>%
+  mutate(party_id = as.factor(party_id),
+         gender = as.factor(gender),
+         education = as.factor(education),
+         class = as.factor(class))  # Convert 'class' explicitly to a factor
+```
+```{r}
+# Re-run logistic regression
+logit_model_2 <- glm(republican_vote ~ party_id + religiosity + 
+                      english_proficiency + political_discussion + 
+                      voter_participation + generational_status +
+                      age + gender + education + class, 
+                   data = df_clean, family = binomial)
+
+```
+
+```{r}
+# Load Stargazer
+library(stargazer)
+
+# Generate table
+stargazer(logit_model, type = "html", 
+          title = "Logistic Regression Results: Latino Republican Vote Choice", 
+          dep.var.labels = c("Republican Vote Choice (1 = Republican, 0 = Other)"),
+          covariate.labels = c("Party Identification", "Religiosity",
+                               "English Proficiency", "Political Discussion", 
+                               "Voter Participation", "Generational Status",
+                               "Age", "Gender (Female = 1)", "Education Level", "Class"),
+          omit.stat = c("aic", "bic"),
+          ci = TRUE, 
+          single.row = TRUE)
+```
+
+
+
+##Interaction Model: Partisan Identification × Religiosity
+This model examines whether party identification moderates the effect of religiosity on Republican vote choice.
+
+#Party_ID and Religiosity
+```{r}
+logit_interaction1 <- glm(republican_vote ~ party_id * religiosity + 
+                            english_proficiency + political_discussion + 
+                            voter_participation + generational_status +
+                            age + gender + education + class, 
+                          family = binomial, data = df_filtered_24)
+
+summary(logit_interaction1)
+```
+
+
+```{r}
+logit_model_poli <- glm(republican_vote ~ party_id * english_proficiency + 
+                                   party_id * political_discussion + 
+                                   party_id * voter_participation + 
+                                   party_id * generational_status +
+                                   age + gender + education + class, 
+                   data = df_filtered_24, family = binomial)
+
+# Display summary of results
+summary(logit_model_poli)
+```
+
+```{r}
+library(ggeffects)
+df_clean<- df %>% filter(!is.na(party_id))
+
+plot1 <- ggpredict(logit_interaction1, terms = c("religiosity", "party_id"))
+plot(plot1)
+```
+#Party Identification x Assimilation
+```{r}
+logit_interaction2 <- glm(republican_vote ~ party_id * (english_proficiency + 
+                            political_discussion + voter_participation) + 
+                            religiosity + generational_status +
+                            age + gender + education + class, 
+                          family = binomial, data = df_filtered_24)
+
+summary(logit_interaction2)
+```
+Interaction Model: Party Identification × Generational Status
+This model tests how the relationship between party identification and Republican vote choice differs across generations.
+```{r}
+logit_interaction3 <- glm(republican_vote ~ party_id * generational_status + 
+                            religiosity + english_proficiency + 
+                            political_discussion + voter_participation +
+                            age + gender + education + class, 
+                          family = binomial, data = df_clean)
+
+summary(logit_interaction3)
+```
+```{r}
+#change to factor
+
+df_filtered_24$generational_status <- factor(df_filtered_24$generational_status, 
+                      levels = c(1, 2, 3), 
+                      labels = c("Both Parents", "1 Parent Born", "None Born in U.S"))
+```
+Since the factor levels are strings, filter the dataset using their exact labels:
+```{r}
+# Subset data by generational status
+first_gen <- df_filtered_24 %>% filter(generational_status == "None Born in U.S")  # First generation
+second_gen <- df_filtered_24 %>% filter(generational_status == "1 Parent Born")  # Second generation
+third_gen <- df_filtered_24 %>% filter(generational_status == "Both Parents")  # Third generation
+
+# Check sample sizes
+nrow(first_gen)  # Number of first-gen respondents
+nrow(second_gen)  # Number of second-gen respondents
+nrow(third_gen)  # Number of third-gen respondents
+```
+```{r}
+# Summarize political assimilation measures by generation
+gen_summary <- df_filtered_24 %>%
+  group_by(generational_status) %>%
+  summarise(
+    avg_english = mean(english_proficiency, na.rm = TRUE),
+    avg_discussion = mean(political_discussion, na.rm = TRUE),
+    avg_participation = mean(voter_participation, na.rm = TRUE)
+  )
+
+# Print summary table
+print(gen_summary)
+```
+Later generations should show higher values for political discussion and participation, reflecting greater political assimilation.
+First-generation immigrants may have lower English proficiency, reinforcing barriers to political engagement.
+
+```{r}
+library(ggplot2)
+
+df_clean %>%
+  group_by(generational_status) %>%
+  summarise(
+    avg_english = mean(english_proficiency, na.rm = TRUE),
+    avg_discussion = mean(political_discussion, na.rm = TRUE),
+    avg_participation = mean(voter_participation, na.rm = TRUE)
+  ) %>%
+  pivot_longer(cols = c(avg_english, avg_discussion, avg_participation),
+               names_to = "Assimilation_Measure", values_to = "Average_Score") %>%
+  ggplot(aes(x = generational_status, y = Average_Score, fill = Assimilation_Measure)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Political Assimilation by Generational Status",
+       x = "Generational Status", y = "Average Score", fill = "Assimilation Measure") +
+  theme_minimal()
+```
+#Interpretation of Logistic Regression Results Across Generations
+This analysis examines how Republican vote choice is influenced by party identification, religiosity, political assimilation (English proficiency, political discussion, voter participation), and demographic controls (age, gender, education, class) among first-, second-, and third-generation Latino voters.
+
+```{r}
+# Logistic regression for first-generation Latinos
+logit_first_gen <- glm(republican_vote ~ party_id + religiosity + 
+                         english_proficiency + political_discussion + 
+                         voter_participation + age + gender + education + class, 
+                       data = first_gen, family = binomial)
+
+summary(logit_first_gen)
+
+# Logistic regression for second-generation Latinos
+logit_second_gen <- glm(republican_vote ~ party_id + religiosity + 
+                          english_proficiency + political_discussion + 
+                          voter_participation + age + gender + education + class, 
+                        data = second_gen, family = binomial)
+
+summary(logit_second_gen)
+
+# Logistic regression for third-generation Latinos
+logit_third_gen <- glm(republican_vote ~ party_id + religiosity + 
+                         english_proficiency + political_discussion + 
+                         voter_participation + age + gender + education + class, 
+                       data = third_gen, family = binomial)
+
+summary(logit_third_gen)
+```
+
+
+
+```{r}
+library(dplyr)
+library(stargazer) # For formatted regression tables
+#library(gt) # Alternative for a cleaner table format
+```
+
+
+
+
+
+
+
+
+
+
+
+``{r}
+library(ggeffects)
+
+plot_gen <- ggpredict(logit_interaction_gen, terms = c("party_id", "generational_status"))
+plot(plot_gen)
+```
+
+```{r}
+# Load necessary library
+library(ggplot2)
+
+# Create cross-tabulation
+table_data <- df %>%
+  group_by(party_id, republican_vote) %>%
+  summarise(count = n(), .groups = "drop") 
+
+# Heatmap
+ggplot(table_data, aes(x = as.factor(party_id), y = as.factor(republican_vote), fill = count)) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  labs(title = "Heatmap of Republican Vote Choice by Partisan ID",
+       x = "Party ID", y = "Vote Choice", fill = "Count") +
+  theme_minimal()
+```
+
+```{r}
+# Frequency distributions of key categorical variables
+table(df_clean$party_id)  # Partisan identification
+table(df_clean$republican_vote)  # Republican vote choice
+table(df_clean$religiosity)  # Religiosity levels
+table(df_clean$generational_status)  # Generational status
+
+# Cross-tabulations
+xtabs(~ party_id + republican_vote, data = df_clean)
+xtabs(~ religiosity + republican_vote, data = df_clean)
+```
+
+```{r}
+
+library(ggplot2)
+
+# Republican vote share over time
+ggplot(df_clean, aes(x=year, fill=as.factor(republican_vote))) +
+  geom_bar(position="fill") +
+  labs(title="Latino Republican Vote Share Over Time",
+       y="Proportion", x="Year") +
+  scale_fill_manual(values=c("blue", "red"), labels=c("Non-Republican", "Republican"))
+
+```
+
+Logistic Regression Model
+```{r}
+# Convert variables to factors
+df_clean$republican_vote <- as.factor(df_clean$republican_vote)
+df_clean$party_id <- as.factor(df_clean$party_id)
+df_clean$religiosity <- as.factor(df_clean$religiosity)
+df_clean$generational_status <- as.factor(df_clean$generational_status)
+
+# Logistic Regression Model
+logit_model <- glm(republican_vote ~ party_id + religiosity + 
+                      english_proficiency + political_discussion + 
+                      voter_participation + generational_status + age + gender + 
+                      education + class, 
+                   data = df_clean, family = binomial)
+
+# Summary of the model
+summary(logit_model)
+```
+
+```{r}
+# Interaction: Party ID x Religiosity
+logit_interaction1 <- glm(republican_vote ~ party_id * religiosity + 
+                              english_proficiency + political_discussion + 
+                              voter_participation + generational_status + age + gender + 
+                              education + class, 
+                           data = df_clean, family = binomial)
+
+# Interaction: Political Assimilation x Party ID
+logit_interaction2 <- glm(republican_vote ~ party_id * (english_proficiency + 
+                          political_discussion + voter_participation) + 
+                          generational_status + age + gender + education + class, 
+                          data = df_clean, family = binomial)
+
+summary(logit_interaction1)
+summary(logit_interaction2)
+```
+Comparative Analysis by Generational Status
+
+
+```{r}
+# Check unique values and counts
+table(df_clean$generational_status)
+
+# Visualize distribution
+ggplot(df_clean, aes(x = as.factor(generational_status))) +
+  geom_bar(fill = "blue") +
+  labs(title = "Distribution of Generational Status", x = "Generational Status", y = "Count") +
+  scale_x_discrete(labels = c("1" = "Both parents US", "2" = "One parent US", "3" = "Both parents Foreign"))
+
+```
+```{r}
+df_clean$generational_status <- as.numeric(as.character(df_clean$generational_status))
+str(df_clean$generational_status)
+table(df_clean$generational_status, useNA = "always")  # Check if there are NA values
+```
+```{r}
+df_clean$generational_status <- factor(df_clean$generational_status, 
+                                 levels = c(1, 2, 3), 
+                                 labels = c("Both parents US", "One parent US", "Both parents Foreign"))
+```
+
+
+compare generational status 
+Separate Logistic Regression Models
+estimates the effect of key independent variables separately for each generational group.
+
+```{r}
+# Subset Data by Generational Status
+first_gen <- df_clean[df_clean$generational_status == "Both parents Foreign", ]
+second_gen <- df_clean[df_clean$generational_status == "One parent US", ]
+third_gen <- df_clean[df_clean$generational_status == "Both parents US", ]
+
+# Logistic Regression for First Generation
+logit_first_gen <- glm(republican_vote ~ party_id + religiosity + english_proficiency + 
+                         political_discussion + voter_participation + age + gender + 
+                         education + class, 
+                       data = first_gen, family = binomial)
+
+# Logistic Regression for Second Generation
+logit_second_gen <- glm(republican_vote ~ party_id + religiosity + english_proficiency + 
+                          political_discussion + voter_participation + age + gender + 
+                          education + class,
+                        data = second_gen, family = binomial)
+
+# Logistic Regression for Third Generation
+logit_third_gen <- glm(republican_vote ~ party_id + religiosity + english_proficiency + 
+                         political_discussion + voter_participation + age + gender + 
+                         education + class, 
+                       data = third_gen, family = binomial)
+
+# Compare Model Summaries
+summary(logit_first_gen)
+summary(logit_second_gen)
+summary(logit_third_gen)
+```
+
+Look at the coefficients (Estimate) for each variable.
+Compare statistical significance (p-values).
+Identify differences in predictors across generations.
+
+Interaction Model- Generation Status
+test generational differences within a single model by adding an interaction effect.
+
+Why Use Interaction?
+Tests whether party ID influences Republican vote choice differently across generations.
+More efficient than separate models (avoids loss of statistical power).
+If the interaction term (party_id * generational_status) is statistically significant, it suggests that the effect of party ID varies by generation.
+```{r}
+logit_interaction <- glm(republican_vote ~ party_id * generational_status + religiosity + 
+                         english_proficiency + political_discussion + voter_participation + 
+                         age + gender + education + class, 
+                         data = df_clean, family = binomial)
+
+summary(logit_interaction)
+```
+none were significant
+
+##Marginal Effects (Probability Differences)
+To visualize the impact of generational status on vote probability, use margins.
+
+```{r}
+
+```
+
+
+```{r}
+logit_model <- glm(republican_vote ~ party_id + generational_status + religiosity + 
+                   english_proficiency + political_discussion + voter_participation + 
+                   age + gender + education + class, 
+                   data = df_clean, family = binomial)
+
+summary(logit_model)
+```
