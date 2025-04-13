@@ -1,0 +1,32 @@
+---
+title: "Multicollinearity Test"
+output: html_document
+date: "2025-03-31"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(boot)
+```
+
+#Model Validation
+
+#Bootstrapping 
+```{r}
+boot_fn <- function(data, indices) {
+  d <- data[indices, ]
+  
+  # Enforce consistent factor levels inside bootstrap loop
+  d$class <- factor(d$class, levels = c("Lower", "Working", "Middle", "Upper"))
+  d$partyid <- factor(d$partyid, levels = c("Democrat", "Republican", "Independent", "Other"))
+  d$gender <- factor(d$gender, levels = c("Male", "Female"))
+
+  model <- glm(republican_vote ~ partyid + relig + assimilation_index + age + gender + class + educ,
+               data = d, family = binomial)
+  return(coef(model))  # Must return a vector of fixed length
+}
+
+set.seed(123)
+boot_results <- boot(data = all_clean, statistic = boot_fn, R = 1000)
+boot_results
+```
